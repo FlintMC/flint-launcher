@@ -56,8 +56,9 @@ public interface LauncherPlugin {
    * Allows the plugin to inject other plugins into the plugin loader.
    *
    * @return other plugins to load
+   * @throws ClassNotFoundException If the class of an extra plugin couldn't be found
    */
-  default List<LauncherPlugin> extraPlugins() {
+  default List<LauncherPlugin> extraPlugins() throws ClassNotFoundException {
     return Collections.emptyList();
   }
 

@@ -99,55 +99,42 @@ public class LaunchController {
         "Loaded {} initial {}.", plugins.size(), plugins.size() != 1 ? "plugins" : "plugin");
     rootLoader.addPlugins(plugins);
 
-    int loadingPass = 0;
-    List<LauncherPlugin> extraPlugins = new ArrayList<>();
-
-    Set<Object> commandlineArguments = new HashSet<>();
-    commandlineArguments.add(launchArguments);
-
     // Loading pass control flow:
     // 1. Let plugins register their commandline receivers
     // 2. Let plugins modify the current commandline for the first time
     // 3. Parse the commandline
     // -- From now on, the plugins may have been configured via the commandline
     // 4. Let plugins modify the current commandline for the second time
-    // 5. Let plugins add extra plugins
-    // 6. Copy extra plugins to main plugins if they are not in the main list already
-    do {
-      loadingPass++;
-      extraPlugins.clear();
-      logger.debug("Executing loading pass {}", loadingPass);
+    // 5. Prepare the root loader for each plugin (e.g. add more URLs to its classpath)
+    // 6. Let plugins add extra plugins
+    // 7. Repeat 1 - 6 for every newly added extra plugin until no plugin has got more extra plugins
 
-      // 1.
-      plugins.forEach(plugin -> plugin.adjustLoadCommandlineArguments(commandlineArguments));
+    Set<Object> commandlineArguments = new HashSet<>();
+    commandlineArguments.add(launchArguments);
 
-      // 2.
-      plugins.forEach(plugin -> plugin.modifyCommandlineArguments(commandLine));
+    for (LauncherPlugin plugin : plugins) {
+      // 1. - 4.
+      this.initializePlugin(plugin, commandlineArguments);
+    }
 
-      // 3.
-      JCommander commandlineParser = new JCommander();
-      commandlineParser.addObject(commandlineArguments);
-      commandlineParser.parse(commandLine.toArray(new String[0]));
+    // 5.
+    rootLoader.addPlugins(plugins);
+    rootLoader.prepare();
 
-      // 4.
-      plugins.forEach(plugin -> plugin.modifyCommandlineArguments(commandLine));
+    int loadingPasses = 0;
 
-      // 5.
-      plugins.forEach(plugin -> extraPlugins.addAll(plugin.extraPlugins()));
-
+    List<LauncherPlugin> initialPlugins = new ArrayList<>(plugins);
+    for (LauncherPlugin plugin : initialPlugins) {
       // 6.
-      rootLoader.addPlugins(extraPlugins);
-      logger.debug(
-          "Found {} extra {}",
-          extraPlugins.size(),
-          extraPlugins.size() != 1 ? "plugins" : "plugin");
-    } while (extraPlugins.size() > 0);
+      int pluginLoadingPasses = this.loadExtraPlugins(plugins, commandlineArguments, plugin);
+      loadingPasses = Math.max(loadingPasses, pluginLoadingPasses);
+    }
 
     // Registering and calling all plugins is done, continue with launch
     logger.info(
         "Took {} loading {} to initialize system, loaded {} {}",
-        loadingPass,
-        loadingPass != 1 ? "passes" : "pass",
+        loadingPasses,
+        loadingPasses != 1 ? "passes" : "pass",
         plugins.size(),
         plugins.size() != 1 ? "plugins" : "plugin");
 
@@ -157,7 +144,6 @@ public class LaunchController {
 
     // Prepare to hand control over to the launch target
     logger.info("Handing over to launch target {}", launchArguments.getLaunchTarget());
-    rootLoader.prepare();
 
     LauncherPlugin exceptionContext = null;
 
@@ -195,6 +181,67 @@ public class LaunchController {
       logger.fatal("Exception while invoking pre-launch callback: {}", exceptionContext, exception);
       System.exit(1);
     }
+  }
+
+  private void initializePlugin(LauncherPlugin plugin, Set<Object> commandlineArguments) {
+    // 1.
+    plugin.adjustLoadCommandlineArguments(commandlineArguments);
+
+    // 2.
+    plugin.modifyCommandlineArguments(commandLine);
+
+    // 3.
+    JCommander commandlineParser = new JCommander();
+    commandlineParser.addObject(commandlineArguments);
+    commandlineParser.parse(commandLine.toArray(new String[0]));
+
+    // 4.
+    plugin.modifyCommandlineArguments(commandLine);
+  }
+
+  private int loadExtraPlugins(
+      List<LauncherPlugin> plugins, Set<Object> commandlineArguments, LauncherPlugin plugin) {
+    int loadingPasses = 1;
+
+    List<LauncherPlugin> currentPlugins = new ArrayList<>();
+    currentPlugins.add(plugin);
+
+    do {
+      List<LauncherPlugin> initializingPlugins = new ArrayList<>(currentPlugins);
+      currentPlugins.clear();
+
+      for (LauncherPlugin currentPlugin : initializingPlugins) {
+        List<LauncherPlugin> extraPlugins = new ArrayList<>();
+
+        try {
+          extraPlugins.addAll(currentPlugin.extraPlugins());
+        } catch (ClassNotFoundException exception) {
+          this.logger.warn(
+              "Failed to load a class of an extra plugin from " + currentPlugin.name(), exception);
+        }
+
+        plugins.addAll(extraPlugins);
+
+        for (LauncherPlugin extraPlugin : extraPlugins) {
+          // 1. - 4.
+          this.initializePlugin(extraPlugin, commandlineArguments);
+        }
+
+        this.rootLoader.addPlugins(extraPlugins);
+
+        for (LauncherPlugin extraPlugin : extraPlugins) {
+          // 5.
+          extraPlugin.configureRootLoader(rootLoader);
+        }
+
+        for (LauncherPlugin extraPlugin : extraPlugins) {
+          // 7.
+          loadingPasses += this.loadExtraPlugins(currentPlugins, commandlineArguments, extraPlugin);
+        }
+      }
+    } while (!currentPlugins.isEmpty());
+
+    return loadingPasses;
   }
 
   /**
