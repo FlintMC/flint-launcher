@@ -31,9 +31,8 @@ jobs:
         run: ./gradlew publish --full-stacktrace
         env:
           VERSION: ${{ steps.get_tag_name.outputs.VERSION }}
-          FLINT_DISTRIBUTOR_PUBLISH_TOKEN: ${{ secrets.FLINT_DISTRIBUTOR_PUBLISH_TOKEN }}
+          FLINT_DISTRIBUTOR_BEARER_TOKEN: ${{ secrets.FLINT_DISTRIBUTOR_BEARER_TOKEN }}
           FLINT_DISTRIBUTOR_URL: ${{ secrets.FLINT_DISTRIBUTOR_URL }}
-          FLINT_DISTRIBUTOR_AUTHORIZATION: ${{ secrets.FLINT_DISTRIBUTOR_AUTHORIZATION }}
 
       - name: Publish Javadocs
         working-directory: docs/generated
