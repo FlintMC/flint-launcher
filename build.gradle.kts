@@ -28,14 +28,22 @@ fun RepositoryHandler.flintRepository(){
     maven {
         setUrl("https://dist.labymod.net/api/v1/maven/release")
         name = "Flint"
-        if (project.hasProperty("net.flintmc.distributor.bearer-token")) {
+
+        var bearerToken = System.getenv("FLINT_DISTRIBUTOR_BEARER_TOKEN")
+
+        if (bearerToken == null && project.hasProperty("net.flintmc.distributor.bearer-token")) {
+            bearerToken = project.property("net.flintmc.distributor.bearer-token").toString()
+        }
+
+        if (bearerToken != null) {
             credentials(HttpHeaderCredentials::class) {
                 name = "Authorization"
-                value = "Bearer ${project.property("net.flintmc.distributor.bearer-token")}"
+                value = "Bearer $bearerToken"
             }
-        }
-        authentication {
-            create<HttpHeaderAuthentication>("header")
+
+            authentication {
+                create<HttpHeaderAuthentication>("header")
+            }
         }
     }
 }
