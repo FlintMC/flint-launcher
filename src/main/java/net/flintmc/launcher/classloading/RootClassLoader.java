@@ -297,6 +297,7 @@ public class RootClassLoader extends URLClassLoader implements CommonClassLoader
   @Override
   public URL findResource(String name) {
     return super.findResource(name);
+    // TODO: 5/18/2021
     // The findResource(String, boolean) method slows down the startup
     // by 10-20 seconds on the Windows operating system.
     //
