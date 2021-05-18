@@ -51,6 +51,8 @@ import org.apache.logging.log4j.Logger;
  */
 public class RootClassLoader extends URLClassLoader implements CommonClassLoader {
 
+  private static final Logger LOGGER = LogManager.getLogger(RootClassLoader.class);
+
   static {
     ClassLoader.registerAsParallelCapable();
   }
@@ -71,7 +73,7 @@ public class RootClassLoader extends URLClassLoader implements CommonClassLoader
    * @param urls The new class path of this class loader
    */
   public RootClassLoader(URL[] urls) {
-    super(urls, null);
+    super(urls, getPlatformClassloader());
     this.currentlyLoading = new HashSet<>();
     this.plugins = new HashSet<>();
     this.children = new ArrayList<>();
@@ -89,6 +91,26 @@ public class RootClassLoader extends URLClassLoader implements CommonClassLoader
     excludeFromModification("javax.");
     excludeFromModification("com.sun.");
     excludeFromModification("net.flintmc.launcher.");
+  }
+
+  /**
+   * Retrieves the classloader from the platform.
+   *
+   * @return The platform classloader.
+   */
+  private static ClassLoader getPlatformClassloader() {
+    String javaVersionProperty = System.getProperty("java.version");
+
+    if (!javaVersionProperty.startsWith("1.")) {
+      try {
+        return (ClassLoader) ClassLoader.class
+            .getDeclaredMethod("getPlatformClassLoader")
+            .invoke(null);
+      } catch (Throwable ignored) {
+        LOGGER.warn("No platform classloader found: {}", javaVersionProperty);
+      }
+    }
+    return null;
   }
 
   public void addModifiedClass(String name, byte[] byteCode) {
@@ -142,7 +164,7 @@ public class RootClassLoader extends URLClassLoader implements CommonClassLoader
    */
   @Override
   public Class<?> findClass(String name) throws ClassNotFoundException {
-    return findClass(name, null);
+    return findClass(name, (ChildClassLoader) null);
   }
 
   /**
@@ -274,7 +296,15 @@ public class RootClassLoader extends URLClassLoader implements CommonClassLoader
    */
   @Override
   public URL findResource(String name) {
-    return findResource(name, true);
+    return super.findResource(name);
+    // The findResource(String, boolean) method slows down the startup
+    // by 10-20 seconds on the Windows operating system.
+    //
+    // I think we still need a better solution for this,
+    // but since there are currently no launcher plugins that could redirect the resource,
+    // the implementation is fine.
+    //
+    // return findResource(name, true);
   }
 
   /**
