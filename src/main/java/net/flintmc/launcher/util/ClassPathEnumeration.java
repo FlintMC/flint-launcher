@@ -98,20 +98,20 @@ public class ClassPathEnumeration implements Enumeration<URL> {
   @Override
   public boolean hasMoreElements() {
     try {
-      return next();
-    } catch (IOException e) {
-      throw new UncheckedIOException(e);
+      return this.next();
+    } catch (IOException exception) {
+      throw new UncheckedIOException(exception);
     }
   }
 
   @Override
   public URL nextElement() {
     try {
-      if (!next()) {
+      if (!this.next()) {
         throw new NoSuchElementException();
       }
-    } catch (IOException e) {
-      throw new UncheckedIOException(e);
+    } catch (IOException exception) {
+      throw new UncheckedIOException(exception);
     }
 
     // Take the current URL and clear it internally, so that the next() function will search again

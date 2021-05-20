@@ -297,7 +297,7 @@ public class RootClassLoader extends URLClassLoader implements CommonClassLoader
    */
   @Override
   public URL findResource(String name) {
-    return findResource(name, true);
+    return this.findResource(name, true);
   }
 
   /**
@@ -371,7 +371,7 @@ public class RootClassLoader extends URLClassLoader implements CommonClassLoader
    */
   @Override
   public Enumeration<URL> findResources(String name) throws IOException {
-    return findResources(name, true);
+    return this.findResources(name, true);
   }
 
   /**
