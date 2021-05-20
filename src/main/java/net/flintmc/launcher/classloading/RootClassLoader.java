@@ -43,6 +43,7 @@ import net.flintmc.launcher.classloading.common.ClassInformation;
 import net.flintmc.launcher.classloading.common.CommonClassLoader;
 import net.flintmc.launcher.classloading.common.CommonClassLoaderHelper;
 import net.flintmc.launcher.service.LauncherPlugin;
+import net.flintmc.launcher.util.ClassPathEnumeration;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -296,16 +297,7 @@ public class RootClassLoader extends URLClassLoader implements CommonClassLoader
    */
   @Override
   public URL findResource(String name) {
-    return super.findResource(name);
-    // TODO: 5/18/2021
-    // The findResource(String, boolean) method slows down the startup
-    // by 10-20 seconds on the Windows operating system.
-    //
-    // I think we still need a better solution for this,
-    // but since there are currently no launcher plugins that could redirect the resource,
-    // the implementation is fine.
-    //
-    // return findResource(name, true);
+    return this.findResource(name, true);
   }
 
   /**
@@ -379,7 +371,7 @@ public class RootClassLoader extends URLClassLoader implements CommonClassLoader
    */
   @Override
   public Enumeration<URL> findResources(String name) throws IOException {
-    return findResources(name, true);
+    return this.findResources(name, true);
   }
 
   /**
@@ -387,39 +379,14 @@ public class RootClassLoader extends URLClassLoader implements CommonClassLoader
    * plugins.
    *
    * @param name          The name of the resource to found
-   * @param allowRedirect Wether child plugins should be allowed to redirect the URL to a new one
+   * @param allowRedirect Whether child plugins should be allowed to redirect the URL to a new one
    * @return An enumeration of URL's pointing to resources matching the given name
    * @throws IOException If an I/O error occurs finding the resources
    * @see ClassLoader#findResources(String)
    */
   public Enumeration<URL> findResources(String name, boolean allowRedirect) throws IOException {
-    // First search our own classpath
-    List<URL> resources = Collections.list(super.findResources(name));
-    for (ChildClassLoader childClassLoader : children) {
-      // For every child as it for matching resources too
-      resources.addAll(Collections.list(childClassLoader.commonFindResources(name)));
-    }
-
-    if (allowRedirect) {
-      // Redirection has been enabled, process every URL
-      List<URL> adjustedResources = new ArrayList<>();
-      for (URL suggested : resources) {
-        for (LauncherPlugin plugin : plugins) {
-          URL newSuggestion = plugin.adjustResourceURL(name, suggested);
-          if (newSuggestion != null) {
-            // The plugin has applied a redirect, copy the new URL to the suggested one
-            suggested = newSuggestion;
-          }
-        }
-
-        // Write down the final URL
-        adjustedResources.add(suggested);
-      }
-
-      return Collections.enumeration(adjustedResources);
-    } else {
-      return Collections.enumeration(resources);
-    }
+    return new ClassPathEnumeration(name, super.findResources(name), this.children,
+        allowRedirect ? this.plugins : null);
   }
 
   /**
